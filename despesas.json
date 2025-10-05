@@ -1,0 +1,82 @@
+[
+  {
+    "id": "db6ed67f",
+    "titulo": "Anticoncepcional",
+    "valor": "30.00",
+    "competencia": "2025-10",
+    "paga": false,
+    "paga_em": "",
+    "tipo": "fixo",
+    "valor_pago": "0"
+  },
+  {
+    "id": "7770124f",
+    "titulo": "Spotify",
+    "valor": "11.90",
+    "competencia": "2025-10",
+    "paga": false,
+    "paga_em": "",
+    "tipo": "fixo",
+    "valor_pago": "0"
+  },
+  {
+    "id": "46ef586b",
+    "titulo": "Conta Vivo",
+    "valor": "50.00",
+    "competencia": "2025-10",
+    "paga": false,
+    "paga_em": "",
+    "tipo": "fixo",
+    "valor_pago": "0"
+  },
+  {
+    "id": "602cc88c",
+    "titulo": "Renner",
+    "valor": "48.72",
+    "competencia": "2025-10",
+    "paga": true,
+    "paga_em": "2025-10-05T14:32:37",
+    "tipo": "fixo",
+    "valor_pago": "48.72"
+  },
+  {
+    "id": "f1b9de71",
+    "titulo": "Gasolina",
+    "valor": "323.00",
+    "competencia": "2025-10",
+    "paga": true,
+    "paga_em": "2025-10-05T14:32:51",
+    "tipo": "fixo",
+    "valor_pago": "323"
+  },
+  {
+    "id": "0f9055b2",
+    "titulo": "ChatGPT",
+    "valor": "20",
+    "competencia": "2025-10",
+    "paga": false,
+    "paga_em": "",
+    "tipo": "fixo",
+    "valor_pago": "0"
+  },
+  {
+    "id": "fbeba916",
+    "titulo": "banho Yumi",
+    "valor": "70",
+    "competencia": "2025-10",
+    "paga": false,
+    "paga_em": "",
+    "tipo": "fixo",
+    "valor_pago": "0"
+  },
+  {
+    "id": "034239dc",
+    "titulo": "Lava-Jato",
+    "valor": "50",
+    "competencia": "2025-10",
+    "paga": false,
+    "paga_em": "",
+    "tipo": "fixo",
+    "valor_pago": "0"
+  }
+]
