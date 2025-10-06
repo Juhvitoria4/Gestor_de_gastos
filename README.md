@@ -1,1 +1,0 @@
-# Gestor_de_gastos

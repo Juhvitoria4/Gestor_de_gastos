@@ -1,15 +1,12 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-
 """
-Gestor de Gastos (GUI / Tkinter)
+Gestor de Gastos
 - Tema rosa
 - Competência por MÊS (mm/aaaa) no lugar de data de vencimento
 - Pagamento parcial: valor restante permanece pendente
 - Categorias: fixo, extra, guardado
 - Filtros por mês, status e busca
 - Totais gerais e do mês filtrado
-- Persistência em despesas.json (compatível com versões anteriores)
+- Persistência em despesas.json 
 """
 
 import json

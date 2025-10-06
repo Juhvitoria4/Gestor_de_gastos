@@ -78,5 +78,45 @@
     "paga_em": "",
     "tipo": "fixo",
     "valor_pago": "0"
+  },
+  {
+    "id": "9104de13",
+    "titulo": "Cilios",
+    "valor": "100",
+    "competencia": "2025-10",
+    "paga": false,
+    "paga_em": "",
+    "tipo": "extra",
+    "valor_pago": "0"
+  },
+  {
+    "id": "b289d8bd",
+    "titulo": "Acessórios",
+    "valor": "34.90",
+    "competencia": "2025-10",
+    "paga": true,
+    "paga_em": "2025-10-06T15:33:33",
+    "tipo": "extra",
+    "valor_pago": "34.90"
+  },
+  {
+    "id": "660270cf",
+    "titulo": "Maquiagem",
+    "valor": "46",
+    "competencia": "2025-10",
+    "paga": true,
+    "paga_em": "2025-10-06T15:33:40",
+    "tipo": "extra",
+    "valor_pago": "46"
+  },
+  {
+    "id": "4295607a",
+    "titulo": "Calças",
+    "valor": "99.18",
+    "competencia": "2025-10",
+    "paga": true,
+    "paga_em": "2025-10-06T15:34:18",
+    "tipo": "extra",
+    "valor_pago": "99.18"
   }
 ]
