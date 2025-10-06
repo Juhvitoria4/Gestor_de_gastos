@@ -118,5 +118,15 @@
     "paga_em": "2025-10-06T15:34:18",
     "tipo": "extra",
     "valor_pago": "99.18"
+  },
+  {
+    "id": "4dc8abd3",
+    "titulo": "Presente de aniversário do Davi",
+    "valor": "150",
+    "competencia": "2025-10",
+    "paga": false,
+    "paga_em": "",
+    "tipo": "extra",
+    "valor_pago": "0"
   }
 ]

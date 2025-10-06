@@ -1,12 +1,12 @@
 """
-Gestor de Gastos
+Gestor de Gastos (GUI / Tkinter) - Responsivo + Filtro por Categoria (Fixos, Extras, Guardado)
 - Tema rosa
-- Competência por MÊS (mm/aaaa) no lugar de data de vencimento
-- Pagamento parcial: valor restante permanece pendente
+- Competência por MÊS (mm/aaaa)
+- Pagamento parcial (coluna "Restante")
 - Categorias: fixo, extra, guardado
-- Filtros por mês, status e busca
+- Filtros por mês, status, categoria e busca
 - Totais gerais e do mês filtrado
-- Persistência em despesas.json 
+- Layout responsivo (grid + pesos, colunas auto-ajustáveis, scrollbars)
 """
 
 import json
@@ -22,8 +22,6 @@ from typing import Optional, Tuple, List
 ARQUIVO = "despesas.json"
 TIPOS = ["fixo", "extra", "guardado"]
 
-# ====================== UTIL ======================
-
 def dinheiro(valor) -> str:
     if not isinstance(valor, Decimal):
         valor = Decimal(str(valor))
@@ -32,7 +30,6 @@ def dinheiro(valor) -> str:
     return f"R$ {s}"
 
 def parse_mm_aaaa(s: str) -> Optional[Tuple[int, int]]:
-    """Recebe 'mm/aaaa' e devolve (ano, mes)."""
     s = (s or "").strip()
     if not s:
         return None
@@ -46,21 +43,13 @@ def rotulo_mm_aaaa(ano: int, mes: int) -> str:
     return f"{mes:02d}/{ano:d}"
 
 def normaliza_competencia(s: str) -> str:
-    """
-    Aceita:
-      - 'mm/aaaa' -> 'aaaa-mm'
-      - 'aaaa-mm' -> 'aaaa-mm'
-      - ''        -> ''
-    """
     s = (s or "").strip()
     if not s:
         return ""
-    # mm/aaaa
     mmaaaa = parse_mm_aaaa(s)
     if mmaaaa:
         aa, mm = mmaaaa
         return f"{aa:04d}-{mm:02d}"
-    # já 'aaaa-mm'?
     try:
         datetime.strptime(s + "-01", "%Y-%m-%d")
         return s
@@ -68,7 +57,6 @@ def normaliza_competencia(s: str) -> str:
         return ""
 
 def rotulo_competencia(iso_yyyy_mm: str) -> str:
-    """Converte 'aaaa-mm' -> 'mm/aaaa' (para exibir)."""
     iso = (iso_yyyy_mm or "").strip()
     if not iso:
         return "-"
@@ -78,18 +66,16 @@ def rotulo_competencia(iso_yyyy_mm: str) -> str:
     except Exception:
         return "-"
 
-# ====================== MODELO ======================
-
 @dataclass
 class Despesa:
     id: str
     titulo: str
-    valor: str          # Decimal em string
-    competencia: str    # 'aaaa-mm' ou ''
+    valor: str
+    competencia: str
     paga: bool
-    paga_em: str        # ISO timestamp ou ''
-    tipo: str           # fixo | extra | guardado
-    valor_pago: str     # Decimal em string (acumula pagamentos parciais)
+    paga_em: str
+    tipo: str
+    valor_pago: str
 
 def carregar() -> List[Despesa]:
     if not os.path.exists(ARQUIVO):
@@ -99,7 +85,6 @@ def carregar() -> List[Despesa]:
             bruto = json.load(f)
         out: List[Despesa] = []
         for d in bruto:
-            # Back-compat: migrar 'vencimento' (data) para 'competencia' (aaaa-mm)
             comp = d.get("competencia", "")
             if not comp:
                 venc = d.get("vencimento", "")
@@ -132,7 +117,6 @@ def carregar() -> List[Despesa]:
                 valor_pago=valor_pago
             )
 
-            # Regra para 'guardado': considerar pago integral
             if desp.tipo == "guardado":
                 desp.paga = True
                 if Decimal(desp.valor_pago) < Decimal(desp.valor):
@@ -140,7 +124,6 @@ def carregar() -> List[Despesa]:
                 if not desp.paga_em:
                     desp.paga_em = datetime.now().isoformat(timespec="seconds")
 
-            # Se não guardado e valor_pago >= valor -> pago
             if desp.tipo != "guardado":
                 if Decimal(desp.valor_pago) >= Decimal(desp.valor):
                     desp.paga = True
@@ -150,7 +133,6 @@ def carregar() -> List[Despesa]:
             out.append(desp)
         return out
     except Exception:
-        # backup se corrompido
         try:
             os.replace(ARQUIVO, ARQUIVO + ".bak")
         except Exception:
@@ -160,8 +142,6 @@ def carregar() -> List[Despesa]:
 def salvar(despesas: List[Despesa]):
     with open(ARQUIVO, "w", encoding="utf-8") as f:
         json.dump([asdict(d) for d in despesas], f, ensure_ascii=False, indent=2)
-
-# ====================== DIÁLOGO ======================
 
 class DespesaDialog(simpledialog.Dialog):
     def __init__(self, master, title="Nova entrada", despesa: Despesa | None = None, styles=None):
@@ -205,6 +185,8 @@ class DespesaDialog(simpledialog.Dialog):
             self.comp.insert(0, rotulo_mm_aaaa(hoje.year, hoje.month))
             self.tipo.set("extra")
 
+        for c in range(2):
+            master.grid_columnconfigure(c, weight=1)
         return self.titulo
 
     def validate(self):
@@ -236,14 +218,12 @@ class DespesaDialog(simpledialog.Dialog):
         }
         return True
 
-# ====================== APP (TK) ======================
-
 class App(tk.Tk):
     def __init__(self):
         super().__init__()
-        self.title("Gestor de Gastos - Rosa (Mensal + Parcial)")
+        self.title("Gestor de Gastos - Rosa (Responsivo + Filtro por Categoria)")
         self.geometry("1150x720")
-        self.resizable(True, True)
+        self.minsize(880, 540)
 
         self.COLORS = {
             "primary": "#E91E63",
@@ -264,12 +244,12 @@ class App(tk.Tk):
 
         self.despesas: List[Despesa] = carregar()
 
-        wrapper = tk.Frame(self, bg=self.COLORS["bg_soft"])
-        wrapper.pack(fill="both", expand=True)
+        self.grid_rowconfigure(1, weight=1)
+        self.grid_columnconfigure(0, weight=1)
 
-        self._monta_toolbar(wrapper)
-        self._monta_tabela(wrapper)
-        self._monta_totais(wrapper)
+        self._monta_toolbar()
+        self._monta_tabela()
+        self._monta_totais()
 
         self.atualiza_lista()
 
@@ -278,7 +258,7 @@ class App(tk.Tk):
         self.bind("<Control-e>", lambda e: self.editar())
         self.bind("<Control-p>", lambda e: self.marcar_paga())
 
-    # ---------- ESTILOS ----------
+        self.tree.bind("<Configure>", lambda e: self._ajusta_colunas())
 
     def _configura_estilos(self):
         c = self.COLORS
@@ -296,107 +276,126 @@ class App(tk.Tk):
         self.style.configure("BadgeTitle.TLabel", background=c["bg_card"], foreground=c["text"])
         self.style.configure("BadgeValue.TLabel", background=c["bg_card"], foreground=c["primary"])
 
-    # ---------- UI ----------
+    def _monta_toolbar(self):
+        bar = ttk.Frame(self, style="Soft.TFrame")
+        bar.grid(row=0, column=0, sticky="ew", padx=12, pady=(12, 6))
+        bar.grid_columnconfigure(0, weight=0)
+        bar.grid_columnconfigure(1, weight=0)
+        bar.grid_columnconfigure(2, weight=0)
+        bar.grid_columnconfigure(3, weight=0)
+        bar.grid_columnconfigure(4, weight=1)  # campo Buscar cresce
+        bar.grid_columnconfigure(5, weight=0)
 
-    def _monta_toolbar(self, parent):
-        bar = ttk.Frame(parent, style="Soft.TFrame")
-        bar.pack(fill="x", padx=12, pady=(12, 6))
+        title = ttk.Label(bar, text="Gestor de Gastos (Mensal + Pagamento Parcial)", font=("Segoe UI", 16, "bold"), style="Pink.TLabel")
+        title.grid(row=0, column=0, sticky="w", padx=(2, 16))
 
-        title = ttk.Label(bar, text="Gestor de Gastos", font=("Segoe UI", 18, "bold"), style="Pink.TLabel")
-        title.pack(side="left", padx=(2, 16))
-
-        ttk.Label(bar, text="Mês:", style="Pink.TLabel").pack(side="left")
+        ttk.Label(bar, text="Mês:", style="Pink.TLabel").grid(row=0, column=1, sticky="w")
         self.var_mes = tk.StringVar(value="Todos")
         self.cb_mes = ttk.Combobox(bar, textvariable=self.var_mes, width=12, state="readonly", style="Pink.TCombobox")
-        self.cb_mes.pack(side="left", padx=6)
+        self.cb_mes.grid(row=0, column=2, sticky="w", padx=6)
         self.cb_mes.bind("<<ComboboxSelected>>", lambda e: self.atualiza_lista())
 
-        ttk.Label(bar, text="Status:", style="Pink.TLabel").pack(side="left", padx=(12, 0))
+        ttk.Label(bar, text="Status:", style="Pink.TLabel").grid(row=0, column=3, sticky="w", padx=(12, 0))
         self.var_filtro = tk.StringVar(value="todas")
         self.cb_filtro = ttk.Combobox(bar, textvariable=self.var_filtro, width=12, state="readonly", values=["todas", "pendentes", "pagas"], style="Pink.TCombobox")
-        self.cb_filtro.pack(side="left", padx=6)
+        self.cb_filtro.grid(row=0, column=3, sticky="e", padx=(64, 6))
         self.cb_filtro.bind("<<ComboboxSelected>>", lambda e: self.atualiza_lista())
 
-        ttk.Label(bar, text="Buscar:", style="Pink.TLabel").pack(side="left", padx=(16, 4))
+        ttk.Label(bar, text="Categoria:", style="Pink.TLabel").grid(row=0, column=4, sticky="w")
+        self.var_categoria = tk.StringVar(value="todas")
+        self.cb_categoria = ttk.Combobox(bar, textvariable=self.var_categoria, width=12, state="readonly", values=["todas", "fixo", "extra", "guardado"], style="Pink.TCombobox")
+        self.cb_categoria.grid(row=0, column=5, sticky="w", padx=6)
+        self.cb_categoria.bind("<<ComboboxSelected>>", lambda e: self.atualiza_lista())
+
+        buscar_wrap = ttk.Frame(bar, style="Soft.TFrame")
+        buscar_wrap.grid(row=0, column=6, sticky="ew", padx=(16, 4))
+        buscar_wrap.grid_columnconfigure(1, weight=1)
+        ttk.Label(buscar_wrap, text="Buscar:", style="Pink.TLabel").grid(row=0, column=0, sticky="w", padx=(0, 6))
         self.var_busca = tk.StringVar()
-        ent = ttk.Entry(bar, textvariable=self.var_busca, width=28, style="Pink.TEntry")
-        ent.pack(side="left", padx=4)
+        ent = ttk.Entry(buscar_wrap, textvariable=self.var_busca, width=28, style="Pink.TEntry")
+        ent.grid(row=0, column=1, sticky="ew")
         ent.bind("<KeyRelease>", lambda e: self.atualiza_lista())
 
         btn_area = ttk.Frame(bar, style="Soft.TFrame")
-        btn_area.pack(side="right")
-        ttk.Button(btn_area, text="Adicionar", style="Pink.TButton", command=self.adicionar).pack(side="left", padx=4)
-        ttk.Button(btn_area, text="Editar", style="Pink.TButton", command=self.editar).pack(side="left", padx=4)
-        ttk.Button(btn_area, text="Marcar paga", style="Pink.TButton", command=self.marcar_paga).pack(side="left", padx=4)
-        ttk.Button(btn_area, text="Remover", style="Pink.TButton", command=self.remover).pack(side="left", padx=4)
-        ttk.Button(btn_area, text="Recarregar", style="Pink.TButton", command=self.recarregar).pack(side="left", padx=4)
+        btn_area.grid(row=0, column=7, sticky="e")
+        ttk.Button(btn_area, text="Adicionar", style="Pink.TButton", command=self.adicionar).pack(side="left", padx=3)
+        ttk.Button(btn_area, text="Editar", style="Pink.TButton", command=self.editar).pack(side="left", padx=3)
+        ttk.Button(btn_area, text="Marcar paga", style="Pink.TButton", command=self.marcar_paga).pack(side="left", padx=3)
+        ttk.Button(btn_area, text="Remover", style="Pink.TButton", command=self.remover).pack(side="left", padx=3)
+        ttk.Button(btn_area, text="Recarregar", style="Pink.TButton", command=self.recarregar).pack(side="left", padx=3)
 
-    def _monta_tabela(self, parent):
-        table_wrap = ttk.Frame(parent, style="Soft.TFrame")
-        table_wrap.pack(fill="both", expand=True, padx=12, pady=6)
+    def _monta_tabela(self):
+        table_wrap = ttk.Frame(self, style="Soft.TFrame")
+        table_wrap.grid(row=1, column=0, sticky="nsew", padx=12, pady=6)
+        table_wrap.grid_rowconfigure(0, weight=1)
+        table_wrap.grid_columnconfigure(0, weight=1)
 
         cols = ("id", "titulo", "tipo", "valor", "restante", "mes", "status", "paga_em")
-        self.tree = ttk.Treeview(table_wrap, columns=cols, show="headings", height=18, style="Pink.Treeview")
-        self.tree.pack(fill="both", expand=True, side="left")
+        self.tree = ttk.Treeview(table_wrap, columns=cols, show="headings", style="Pink.Treeview")
+        self.tree.grid(row=0, column=0, sticky="nsew")
 
-        self.tree.heading("id", text="ID", anchor="w")
-        self.tree.heading("titulo", text="Título", anchor="w")
-        self.tree.heading("tipo", text="Tipo", anchor="center")
-        self.tree.heading("valor", text="Valor", anchor="center")
-        self.tree.heading("restante", text="Restante", anchor="center")
-        self.tree.heading("mes", text="Mês", anchor="center")
-        self.tree.heading("status", text="Status", anchor="center")
-        self.tree.heading("paga_em", text="Pago em", anchor="center")
-
-        self.tree.column("id", width=90, anchor="w")
-        self.tree.column("titulo", width=400, anchor="w")
-        self.tree.column("tipo", width=110, anchor="center")
-        self.tree.column("valor", width=120, anchor="e")
-        self.tree.column("restante", width=120, anchor="e")
-        self.tree.column("mes", width=120, anchor="center")
-        self.tree.column("status", width=110, anchor="center")
-        self.tree.column("paga_em", width=160, anchor="center")
+        headings = {
+            "id": "ID",
+            "titulo": "Título",
+            "tipo": "Tipo",
+            "valor": "Valor",
+            "restante": "Restante",
+            "mes": "Mês",
+            "status": "Status",
+            "paga_em": "Pago em",
+        }
+        for c, txt in headings.items():
+            self.tree.heading(c, text=txt, anchor="w" if c in ("id", "titulo") else "center")
 
         vsb = ttk.Scrollbar(table_wrap, orient="vertical", command=self.tree.yview)
-        self.tree.configure(yscrollcommand=vsb.set)
-        vsb.pack(side="right", fill="y")
+        hsb = ttk.Scrollbar(table_wrap, orient="horizontal", command=self.tree.xview)
+        self.tree.configure(yscrollcommand=vsb.set, xscrollcommand=hsb.set)
+        vsb.grid(row=0, column=1, sticky="ns")
+        hsb.grid(row=1, column=0, sticky="ew")
 
         self.tree.tag_configure("row_odd", background="#fff")
         self.tree.tag_configure("row_even", background="#fff8fb")
 
         self.tree.bind("<Double-1>", self._duplo_clique)
 
-    def _monta_totais(self, parent):
-        row1 = ttk.Frame(parent, style="Soft.TFrame")
-        row1.pack(fill="x", padx=12, pady=(6, 3))
-        self.card_gastos_all = self._badge_card(row1, "Gastos (tudo)", "R$ 0,00")
-        self.card_pendente_all = self._badge_card(row1, "Pendente (tudo)", "R$ 0,00")
-        self.card_guardado_all = self._badge_card(row1, "Guardado (tudo)", "R$ 0,00")
-        for w in (self.card_gastos_all, self.card_pendente_all, self.card_guardado_all):
-            w.pack(side="left", padx=6)
+    def _monta_totais(self):
+        totals = ttk.Frame(self, style="Soft.TFrame")
+        totals.grid(row=2, column=0, sticky="ew", padx=12, pady=(6, 12))
+        totals.grid_columnconfigure(0, weight=1)
+        totals.grid_columnconfigure(1, weight=1)
+        totals.grid_columnconfigure(2, weight=1)
+        totals.grid_columnconfigure(3, weight=1)
+        totals.grid_columnconfigure(4, weight=1)
+        totals.grid_columnconfigure(5, weight=1)
 
-        row2 = ttk.Frame(parent, style="Soft.TFrame")
-        row2.pack(fill="x", padx=12, pady=(3, 12))
-        self.card_gastos_mes = self._badge_card(row2, "Gastos (mês filtro)", "R$ 0,00")
-        self.card_pendente_mes = self._badge_card(row2, "Pendente (mês filtro)", "R$ 0,00")
-        self.card_guardado_mes = self._badge_card(row2, "Guardado (mês filtro)", "R$ 0,00")
-        for w in (self.card_gastos_mes, self.card_pendente_mes, self.card_guardado_mes):
-            w.pack(side="left", padx=6)
+        self.card_gastos_all = self._badge_card(totals, "Gastos (tudo)", "R$ 0,00")
+        self.card_pendente_all = self._badge_card(totals, "Pendente (tudo)", "R$ 0,00")
+        self.card_guardado_all = self._badge_card(totals, "Guardado (tudo)", "R$ 0,00")
 
-        hint = ttk.Label(parent, text="Dicas: Duplo clique abre pagamento parcial • Ctrl+N (Adicionar) • Ctrl+E (Editar) • Ctrl+P (Pagar) • Del (Remover)", style="Pink.TLabel")
-        hint.pack(anchor="e", padx=12, pady=(0, 8))
+        self.card_gastos_all.grid(row=0, column=0, sticky="ew", padx=6)
+        self.card_pendente_all.grid(row=0, column=1, sticky="ew", padx=6)
+        self.card_guardado_all.grid(row=0, column=2, sticky="ew", padx=6)
+
+        self.card_gastos_mes = self._badge_card(totals, "Gastos (mês filtro)", "R$ 0,00")
+        self.card_pendente_mes = self._badge_card(totals, "Pendente (mês filtro)", "R$ 0,00")
+        self.card_guardado_mes = self._badge_card(totals, "Guardado (mês filtro)", "R$ 0,00")
+
+        self.card_gastos_mes.grid(row=1, column=0, sticky="ew", padx=6, pady=(8, 0))
+        self.card_pendente_mes.grid(row=1, column=1, sticky="ew", padx=6, pady=(8, 0))
+        self.card_guardado_mes.grid(row=1, column=2, sticky="ew", padx=6, pady=(8, 0))
+
+        sizegrip = ttk.Sizegrip(self)
+        sizegrip.grid(row=2, column=0, sticky="se", padx=4, pady=4)
 
     def _badge_card(self, parent, title, value):
         frame = ttk.Frame(parent, style="Card.TFrame")
         inner = ttk.Frame(frame, style="Card.TFrame")
-        inner.pack(padx=10, pady=8)
+        inner.pack(padx=10, pady=8, fill="x")
         ttk.Label(inner, text=title, font=("Segoe UI", 10, "bold"), style="BadgeTitle.TLabel").pack(anchor="w")
         v = ttk.Label(inner, text=value, font=("Segoe UI", 14, "bold"), style="BadgeValue.TLabel")
         v.pack(anchor="w", pady=(2, 0))
         frame._badge_value = v
         return frame
-
-    # ---------- LÓGICA ----------
 
     def _meses_disponiveis(self):
         chaves = set()
@@ -416,14 +415,16 @@ class App(tk.Tk):
             self.var_mes.set("Todos")
 
     def _aplica_filtros_base(self, base: List[Despesa]) -> List[Despesa]:
-        # status
-        f = self.var_filtro.get()
-        if f == "pendentes":
+        f_categoria = self.var_categoria.get()
+        if f_categoria != "todas":
+            base = [d for d in base if d.tipo == f_categoria]
+
+        f_status = self.var_filtro.get()
+        if f_status == "pendentes":
             base = [d for d in base if d.tipo != "guardado" and (Decimal(d.valor) - Decimal(d.valor_pago)) > 0]
-        elif f == "pagas":
+        elif f_status == "pagas":
             base = [d for d in base if d.tipo == "guardado" or (Decimal(d.valor) - Decimal(d.valor_pago)) <= 0]
 
-        # mês
         mes_sel = self.var_mes.get()
         if mes_sel and mes_sel != "Todos":
             alvo = parse_mm_aaaa(mes_sel)
@@ -431,7 +432,6 @@ class App(tk.Tk):
                 aa, mm = alvo
                 base = [d for d in base if d.competencia == f"{aa:04d}-{mm:02d}"]
 
-        # busca
         q = (self.var_busca.get() or "").strip().lower()
         if q:
             base = [d for d in base if q in d.titulo.lower()]
@@ -449,6 +449,28 @@ class App(tk.Tk):
     def _sum_pendente(self, linhas: List[Despesa]) -> Decimal:
         return sum(((Decimal(d.valor) - Decimal(d.valor_pago)) for d in linhas if d.tipo in ("fixo", "extra")), Decimal("0"))
 
+    def _atualiza_totais(self):
+        todas_despesas = list(self.despesas)
+        
+        gastos_total = self._sum_gastos_total(todas_despesas)
+        pendente_total = self._sum_pendente(todas_despesas)
+        guardado_total = self._sum_guardado(todas_despesas)
+        
+        self.card_gastos_all._badge_value.config(text=dinheiro(gastos_total))
+        self.card_pendente_all._badge_value.config(text=dinheiro(pendente_total))
+        self.card_guardado_all._badge_value.config(text=dinheiro(guardado_total))
+
+    def _atualiza_totais_mes(self):
+        despesas_filtradas = self._filtradas()
+        
+        gastos_mes = self._sum_gastos_total(despesas_filtradas)
+        pendente_mes = self._sum_pendente(despesas_filtradas)
+        guardado_mes = self._sum_guardado(despesas_filtradas)
+        
+        self.card_gastos_mes._badge_value.config(text=dinheiro(gastos_mes))
+        self.card_pendente_mes._badge_value.config(text=dinheiro(pendente_mes))
+        self.card_guardado_mes._badge_value.config(text=dinheiro(guardado_mes))
+
     def atualiza_lista(self):
         self._atualiza_combo_mes()
 
@@ -465,8 +487,7 @@ class App(tk.Tk):
             comp_label = rotulo_competencia(d.competencia)
             pago_em = d.paga_em.replace("T", " ") if d.paga_em else "-"
 
-            tags = []
-            tags.append("row_even" if idx % 2 == 0 else "row_odd")
+            tags = ["row_even" if idx % 2 == 0 else "row_odd"]
 
             self.tree.insert(
                 "", "end", iid=d.id,
@@ -474,30 +495,36 @@ class App(tk.Tk):
                 tags=tuple(tags)
             )
 
+        self._ajusta_colunas()
         self._atualiza_totais()
         self._atualiza_totais_mes()
 
-    def _atualiza_totais(self):
-        linhas = list(self.despesas)
-        gastos_all = self._sum_gastos_total(linhas)
-        pendente_all = self._sum_pendente(linhas)
-        guardado_all = self._sum_guardado(linhas)
+    def _ajusta_colunas(self):
+        try:
+            total = max(1, self.tree.winfo_width())
+        except Exception:
+            return
 
-        self.card_gastos_all._badge_value.config(text=dinheiro(gastos_all))
-        self.card_pendente_all._badge_value.config(text=dinheiro(pendente_all))
-        self.card_guardado_all._badge_value.config(text=dinheiro(guardado_all))
+        w_id = 90
+        w_tipo = 110
+        w_val = 120
+        w_rest = 120
+        w_mes = 120
+        w_status = 110
+        w_pagoem_min = 160
 
-    def _atualiza_totais_mes(self):
-        linhas = self._filtradas()
-        gastos_mes = self._sum_gastos_total(linhas)
-        pendente_mes = self._sum_pendente(linhas)
-        guardado_mes = self._sum_guardado(linhas)
+        usados = w_id + w_tipo + w_val + w_rest + w_mes + w_status + w_pagoem_min
+        w_titulo = max(200, total - usados - 8)
 
-        self.card_gastos_mes._badge_value.config(text=dinheiro(gastos_mes))
-        self.card_pendente_mes._badge_value.config(text=dinheiro(pendente_mes))
-        self.card_guardado_mes._badge_value.config(text=dinheiro(guardado_mes))
+        self.tree.column("id", width=w_id, minwidth=70, anchor="w")
+        self.tree.column("tipo", width=w_tipo, minwidth=90, anchor="center")
+        self.tree.column("valor", width=w_val, minwidth=100, anchor="e")
+        self.tree.column("restante", width=w_rest, minwidth=100, anchor="e")
+        self.tree.column("mes", width=w_mes, minwidth=100, anchor="center")
+        self.tree.column("status", width=w_status, minwidth=90, anchor="center")
+        self.tree.column("paga_em", width=w_pagoem_min, minwidth=140, anchor="center")
 
-    # ---------- AÇÕES ----------
+        self.tree.column("titulo", width=w_titulo, minwidth=200, anchor="w")
 
     def adicionar(self):
         dlg = DespesaDialog(self, title="Nova entrada", styles=self.COLORS)
@@ -507,7 +534,6 @@ class App(tk.Tk):
         valor = Decimal(r["valor"])
         tipo = r["tipo"]
         if tipo == "guardado":
-            # Guardado entra como pago integral (não é pendência)
             valor_pago = valor
             paga = True
             paga_em = datetime.now().isoformat(timespec="seconds")
@@ -558,12 +584,11 @@ class App(tk.Tk):
         d.tipo = r["tipo"]
 
         if d.tipo == "guardado":
-            d.valor_pago = str(novo_valor)  # pago integral
+            d.valor_pago = str(novo_valor)
             d.paga = True
             if not d.paga_em:
                 d.paga_em = datetime.now().isoformat(timespec="seconds")
         else:
-            # Se reduzir valor abaixo do já pago, trunca
             if antigo_pago > novo_valor:
                 d.valor_pago = str(novo_valor)
             d.paga = Decimal(d.valor_pago) >= novo_valor
@@ -590,12 +615,7 @@ class App(tk.Tk):
             messagebox.showinfo("Info", "Essa despesa já está totalmente paga.")
             return
 
-        # pergunta quanto pagar agora (padrão = restante)
-        resp = simpledialog.askstring(
-            "Pagamento parcial",
-            f"Valor a pagar agora (restante {dinheiro(restante)}):",
-            parent=self
-        )
+        resp = simpledialog.askstring("Pagamento parcial", f"Valor a pagar agora (restante {dinheiro(restante)}):", parent=self)
         if resp is None:
             return
         s = resp.strip().replace("R$", "").replace(" ", "")
@@ -641,12 +661,10 @@ class App(tk.Tk):
         self.atualiza_lista()
 
     def _duplo_clique(self, _event):
-        # atalho: duplo clique para abrir pagamento parcial
         d = self._selecionada()
         if d and d.tipo != "guardado":
             self.marcar_paga()
 
-# ====================== MAIN ======================
-
 if __name__ == "__main__":
     App().mainloop()
+
